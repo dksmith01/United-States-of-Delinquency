@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script src="http://dimplejs.org/dist/dimple.v2.0.0.min.js"></script>
+<script src="https://d3js.org/d3-format.v0.5.min.js"></script>
+<style type='text/css'>
+
+/* Styles to control various visual elements of the visualization */	
+#left-axis {
+border: 1px solid green;
+}
+line.slope-line {
+stroke: #eee;
+stroke-width: 2;
+}
+line.slope-line-positive--hover {
+	stroke: #26C4F1;
+	cursor: default;
+
+}
+line.slope-line-negative--hover {
+	stroke: #E93F2E;
+	cursor: default;
+}
+line.slope-line-neutral--hover, line.slope-line-neutral {
+stroke: black;
+cursor: default;
+}
+text.slope-label {
+display: none;
+}
+text.slope-label--hover {
+fill: #000;
+font: 11px Arial;
+display: block;
+cursor: default;
+}
+text.avg-label--other-hover, text.slope-label-min-max--other-hover {
+fill: #ccc;
+font: 10px Arial;
+display: block;
+}
+text.axis-title {
+text-decoration: underline;
+}
+text.axis-title, text.slope-label-min-max, text.avg-label {
+font: 10px Arial;
+}
+text.axis-title, text.avg-label {
+fill: #333;
+}
+text.slope-label-min-max {
+fill: #333;
+}
+text.left-tick, text.right-tick {
+font: 10px Arial;
+display: block;
+fill: #333;
+}
+line.left-tick-line, line.right-tick-line {
+stroke: #ccc;
+stroke-width: 0.5;
+}
+#text-region, #svg-holder, #menu {
+float: left;
+overflow: hidden;
+}
+#text-region {
+font-family: Arial;
+width: 337px;
+margin-left: 3px;
+margin-right: 10px;
+}
+#text-region p {
+font-size: 14px;
+text-align: justify;
+}
+#menu {
+width: 110px;
+}
+#menu p {
+font-family: Arial;
+margin: 0;
+text-align: center;
+cursor: default;
+}
+.menu-p-positive--hover {
+background-color: #26C4F1;
+opacity: 1;
+}
+.menu-p-negative--hover {
+background-color: #E93F2E;
+opacity: .75;
+}
+.menu-p-neutral--hover {
+background-color: #aaa;
+opacity: .75;
+}
+.menu-p-neutral {
+background-color: #ddd;
+opacity: .75;
+}
+#inner-wrapper {
+width: 960px;
+margin: 0 auto;
+}
+</style>
+<script type="text/javascript">
+function draw(data) {
+      
+        "use strict";
+        
+	/* Setup options for use in the code to help control the positioning of the
+		 graphic easily */  
+        var opts = {
+        	width: 500,
+       	 	height: 500,
+        	margin: {top: 60, toptext: 12, right: 10, bottom: 30, left: 10},
+        	labelLength: 90,
+        	labelGap: 2
+    	};
+	/* chartHeight and chartWidth control the area where the slope lines are 
+		drawn */
+        var chartHeight = opts.height - opts.margin.top - opts.margin.bottom;
+        var chartWidth = opts.width - opts.margin.right - opts.margin.left;
+	
+	/* I know I will have 54 items in the right menu: 51 states + national 
+		average + repaying states + defaulting states */
+	var menu_p_Height = opts.height / 54;
+	var menu_p_FontHeight = menu_p_Height - 2;
+
+	/* This section involves going through the state data in the CSV to get 
+		weighted values for MeanIncome, PctNonPerf, PaymentDTI, and the fitted
+		PctNonPerf values to add to the data array as "totals"
+	 */
+	var totals = {};
+	totals['BorrowerState'] = 'National Average';
+	var income_times_loans = 0;
+	var pctnonperf_times_loans = 0;
+	var pctnonperf_fitted_withMeanIncome_times_loans = 0;
+	var paymentDTI_times_loans = 0;
+	var pctnonperf_fitted_withPaymentDTI_times_loans = 0;
+	data.forEach(function(d) {
+	    income_times_loans += d.MeanIncome * d.Total;
+	    pctnonperf_times_loans += d.PctNonPerf * d.Total;
+	    pctnonperf_fitted_withMeanIncome_times_loans += 
+	    	d.PctNonPerf_Fitted * d.Total;
+	    paymentDTI_times_loans += d.PaymentDTI * d.Total;
+	    pctnonperf_fitted_withPaymentDTI_times_loans += 
+	    	d.PaymentDTI_Fitted * d.Total;
+	});
+
+	var total_count = d3.sum(data, function(d) { return d.Total });
+	totals['MeanIncome'] = income_times_loans / total_count;
+	totals['PctNonPerf'] = pctnonperf_times_loans / total_count;
+	totals['PctNonPerf_Fitted_withMeanIncome'] = 
+		pctnonperf_fitted_withMeanIncome_times_loans / total_count;
+	totals['PaymentDTI'] = paymentDTI_times_loans / total_count;
+	totals['PctNonPerf_Fitted_withPaymentDTI'] = 
+		pctnonperf_fitted_withPaymentDTI_times_loans / total_count;
+	
+	/* Sort the state names in alphabetical order to make them easy to find in
+	 the right-hand menu */
+	data.sort( function(a, b) { 
+		return d3.ascending(a.BorrowerState, b.BorrowerState); 
+	} )
+	
+	/* Add totals as the first element in the data array */
+	data.unshift(totals);
+	
+	/* Make the menu stretch the entire allotted height of the graphic */
+	d3.select('#menu')
+	    .style('height', opts.height)
+	    
+	/* Create the svg with a g under it with a class "chart" */
+	var svg = d3.select("#svg-holder")
+	    .append("svg")
+			.attr({width: opts.width, height: opts.height})
+	    .append('g')
+			.attr('class','chart');
+	
+	/* Add axis titles above the left and right axes */	
+    d3.select("#svg-holder svg g.chart")
+	    .append('text')
+		.attr({
+		    x : opts.margin.left,
+		    y : opts.margin.toptext,
+		    class : 'axis-title',
+		    'text-anchor' : 'start'
+		    })
+		.text('Average Monthly Income ($)');
+	
+	d3.select("#svg-holder svg g.chart")
+	    .append('text')
+		.attr({
+		    x : opts.width - opts.margin.right,
+		    y : opts.margin.toptext,
+		    class : "axis-title",
+		    'text-anchor' : 'end'
+		    })
+		.text('Loan Default Rate (%)');	
+
+	/* Adjust the scale of the left-hand menu to accomodate the variance
+		in the right-hand menu. Start by finding the differences between the 
+		size of the OLS-fitted values and the actual values for PctNonPerf. */
+        
+	var fittedMinMax = d3.extent(data, function(d) { 
+		return d.PctNonPerf_Fitted_withMeanIncome; 
+	});
+	
+	var actualMinMax = d3.extent(data, function(d) { 
+		return d.PctNonPerf; 
+	});
+	var actualLength = actualMinMax[1] - actualMinMax[0];
+	
+	/* Then find the pct differences that the top of the axis needs to shift
+		and the bottom axis needs to shift */
+	var delta_YTopPctOfTotal = (fittedMinMax[0] - actualMinMax[0]) / 
+								actualLength;
+	var delta_YBottomPctOfTotal = (actualMinMax[1] - fittedMinMax[1]) / 
+								actualLength;
+	
+	/* Use those percentages to adjust the chartHeight for the left axis */
+	var topAdj = delta_YTopPctOfTotal * chartHeight;
+	var bottomAdj = delta_YBottomPctOfTotal * chartHeight;
+	var left_axis = d3.scale.linear().range([topAdj, chartHeight - bottomAdj]);
+	left_axis.domain(d3.extent(data, function(d) { 
+		return d.MeanIncome; 
+	}).reverse()); /* Reverse the order so the lowest value is on the bottom */
+		
+	/* The right axis uses the whole chartHeight for its complete scale */
+	var right_axis = d3.scale.linear().range([0, chartHeight]);
+	right_axis.domain(actualMinMax);
+
+	/* Figure out which ticks to include on the left axis by rounding the max
+		and min values on that axis to the nearest $1,000 */
+	var leftAxisTicks = [d3.min(data, function (d) { 
+		return 1000 * Math.floor(d.MeanIncome / 1000 ) 
+	})];
+	leftAxisTicks.push(d3.max(data, function (d) { 
+		return 1000 * Math.ceil(d.MeanIncome / 1000) 
+	}));
+	for ( 	var i = Math.min.apply(Math, leftAxisTicks) + 1000; 
+			i < Math.max.apply(Math, leftAxisTicks); 
+			i = i + 1000 
+		) {
+	    	leftAxisTicks.push(i);
+		}
+	leftAxisTicks = leftAxisTicks.sort();
+	
+	/* Add the left ticks and the corresponding lines to the chart */
+	var leftTicks = svg.selectAll('text.left-tick').data(leftAxisTicks);
+	leftTicks.enter()
+	    .append('text')
+		.attr({
+			x : opts.margin.left,
+			y : function(d, i) { return opts.margin.top + left_axis(d) - 2; },
+			class : 'left-tick',
+			'text-anchor' : 'start'
+		})
+	    .text( function(d, i) { 
+	    	return d3.format("$,.4r")(d); 
+	    })
+	    
+	var leftTickLines = svg.selectAll('line.left-tick-line')
+		.data(leftAxisTicks);
+	leftTickLines.enter()
+	    .append('line')
+		.attr({
+			x1 : opts.margin.left,
+			x2 : opts.margin.left + opts.labelLength,
+			y1 : function(d, i) { return opts.margin.top + left_axis(d); },
+			y2 : function(d, i) { return opts.margin.top + left_axis(d); },
+			class : 'left-tick-line',
+			'stroke-dasharray' : '3, 2'
+		});
+	
+	/* Figure out which ticks to use on the right axis by rounding the min and
+		max Loan Default Percentages to the nearest 5% */
+	var rightAxisTicks = [
+		Math.round(
+			5/100 * Math.floor(
+				Math.floor(actualMinMax[0] * 100) / 5) * 100
+				)
+			/ 100,
+		Math.round(
+			5/100 * Math.ceil(
+				Math.ceil(actualMinMax[1] * 100) / 5) * 100) 
+			/ 100 
+	];
+	
+	for ( 	var j = Math.min.apply(Math, rightAxisTicks) + 0.05; 
+			j.toFixed(2) < Math.max.apply(Math, rightAxisTicks).toFixed(2); 
+			j = +j.toFixed(2) + 0.05 
+		) {
+	    	rightAxisTicks.push(j);
+		}
+	rightAxisTicks = rightAxisTicks.sort();
+	
+	/* Add the right ticks and corresponding lines to the chart */
+	var rightTicks = svg.selectAll('text.right-tick').data(rightAxisTicks);
+	rightTicks.enter()
+	    .append('text')
+		.attr({
+			x : opts.width - opts.margin.right,
+			y : function(d, i) { return opts.margin.top + right_axis(d) - 2; },
+			class : 'right-tick',
+			'text-anchor' : 'end'
+		})
+	    .text( function(d, i) { return d3.format(".1%")(d); })
+	    
+	var rightTickLines = svg.selectAll('line.right-tick-line')
+		.data(rightAxisTicks);
+	rightTickLines.enter()
+	    .append('line')
+		.attr({
+			x1 : opts.width - opts.margin.right - opts.labelLength,
+			x2 : opts.width - opts.margin.right,
+			y1 : function(d, i) { return opts.margin.top + right_axis(d); },
+			y2 : function(d, i) { return opts.margin.top + right_axis(d); },
+			class : 'right-tick-line',
+			'stroke-dasharray' : '3, 2'
+		});
+		   
+	/* Bind the data to a collection of lines and draw lines on the chart.
+		If it's the National Average, give it the "slope-line-neutral" class.
+		If the slope is positive, give it the "slope-line-positive" class.
+		If the slope is negative, give it the "slope-line-negative" class.
+		Also set it up to call the mouseover and mouseout functions using ".on"
+	*/
+	var lines = svg.selectAll('line.slope-line').data(data);          
+	lines.enter().append("line")
+	lines.attr({
+		    class: function(d) {
+		    	if (d.BorrowerState == 'National Average') {
+		    	    return 'slope-line slope-line-neutral';
+			} else if (left_axis(d.MeanIncome) - right_axis(d.PctNonPerf) > 0) {
+			    return 'slope-line slope-line-positive';
+			} else if (left_axis(d.MeanIncome) - right_axis(d.PctNonPerf) < 0) {
+			    return 'slope-line slope-line-negative';
+		    } else {
+			    return 'slope-line';
+			}
+		    },
+		    id: function(d) { return d.BorrowerState.replace(" ", "-"); },
+		    x1: opts.margin.left + opts.labelLength,
+		    x2: opts.width - opts.margin.right - opts.labelLength,      	
+		    y1: function(d) { 
+		    	return opts.margin.top + left_axis(d.MeanIncome); 
+		    },
+		    y2: function(d) { 
+		    	return opts.margin.top + right_axis(d.PctNonPerf); 
+		    },    
+		})
+		.on("mouseover", mouseover)
+		.on("mouseout", mouseout);
+	lines.exit().remove();
+	
+	/* This defines a small function to move the selected object (like a label
+		or a line) to the top of the z-index heap, so it shows completely 
+		above all others.
+	*/
+	d3.selection.prototype.moveToFront = function() {
+	    return this.each(function(){
+		this.parentNode.appendChild(this);
+	    });
+	};
+	
+	/* Upon drawing all the grey default lines, move the National Average line
+		to the front
+	*/
+	d3.selectAll('line.slope-line-neutral').moveToFront();
+	
+	/* Use the d3.extent function to get the minimum and maximum Mean Income */
+	var minmaxMeanIncome = d3.extent(data, function(d) { 
+		return d.MeanIncome; 
+	});
+	
+	/* Bind the data to the left text labels, and concatenate the BorrowerState
+		with the Mean Income as the text. Put the slope-label-min-max class 
+		if the MeanIncome is included in the extent array defined above.
+	*/
+    var leftLabels = svg.selectAll('text.left_labels').data(data);
+    leftLabels.enter().append('text');
+    leftLabels.attr({
+        	class: function(d) {
+				if (minmaxMeanIncome.indexOf(d.MeanIncome) > -1) {
+					return 'left_labels slope-label-min-max';
+				} else if (d.BorrowerState == 'National Average') {
+					return 'left_labels avg-label';
+				} else {
+					return 'left_labels slope-label';
+				}
+			},
+        	id: function(d) { return d.BorrowerState.replace(" ", "-"); },
+		    x: opts.margin.left + opts.labelLength - opts.labelGap,
+		    y: function(d,i) { 
+		    	return opts.margin.top + left_axis(d.MeanIncome); 
+		    },
+		    dy: '.35em',
+		    'text-anchor': 'end'}
+		)
+		.text(function(d) {
+		    if (d.BorrowerState == 'National Average') {
+			return 'AVG' + d3.format(" $,.4r")(d.MeanIncome);
+		    } else {
+			return d.BorrowerState + d3.format(" $,.4r")(d.MeanIncome);
+		    }
+		})
+		.on("mouseover", mouseover)
+		.on("mouseout", mouseout);
+    leftLabels.exit().remove();
+
+    var rightLabels = svg.selectAll('text.right_labels').data(data);
+    rightLabels.enter().append('text');
+    rightLabels.attr({
+		    class : function(d) {
+				if (actualMinMax.indexOf(d.PctNonPerf) > -1) {
+					return 'right_labels slope-label-min-max';
+				} else if (d.BorrowerState == 'National Average') {
+					return 'right_labels avg-label';
+				} else {
+					return 'right_labels slope-label';
+				}
+		    },
+		    id: function(d) { return d.BorrowerState.replace(" ", "-"); },
+		    x: opts.width - opts.margin.right - opts.labelLength +opts.labelGap,
+		    y: function(d,i) { 
+		    	return opts.margin.top + right_axis(d.PctNonPerf); 
+		    },
+		    dy: '.35em'})
+		.text(function(d) {
+			if (d.BorrowerState == 'National Average') {
+			return d3.format(".1%")(+d.PctNonPerf) + ' AVG';
+			} else {
+			return d3.format(".1%")(+d.PctNonPerf) + ' ' + d.BorrowerState;
+			}
+		})
+		.on("mouseover", mouseover)
+		.on("mouseout", mouseout);
+    rightLabels.exit().remove();
+        
+    /* Bind the data to the menu paragraphs (<p>'s) in the right #menu div */
+	var menuStates = d3.selectAll('#menu');
+	menuStates.selectAll('p.dynamic')
+	    .data(data)
+	    .enter()
+	    .append('p')
+	    .text( function(d) { return d.BorrowerState; })
+	    .attr({
+		id: function(d) { return d.BorrowerState.replace(" ", "-"); },
+		class: function(d) {
+		    if (d.BorrowerState == 'National Average') {
+			return 'menu-item menu-p-neutral';
+		    } else if (left_axis(d.MeanIncome) - right_axis(d.PctNonPerf) > 0) {
+			return 'menu-item menu-item-positive';
+		    } else if (left_axis(d.MeanIncome) - right_axis(d.PctNonPerf) < 0) {
+			return 'menu-item menu-item-negative';
+		    } else {
+			return 'menu-item';
+		    }
+		}
+		})
+	    .on('mouseover', mouseover)
+	    .on('mouseout', mouseout);
+
+	/* Insert <p>'s with the Repaying States and Defaulting States labels
+		and the appropriate mouseover/mouseout and class assignments.	
+	*/
+	menuStates.insert('p', '#' + data[0]['BorrowerState'].replace(' ', '-'))
+	    .text('Repaying States')
+	    .attr('id', 'positive')
+	    .attr('class', 'fixed menu-item')
+	    .on('mouseover', mouseover_positive)
+	    .on('mouseout', mouseout_positive)
+	menuStates.insert('p', '#' + data[0]['BorrowerState'].replace(' ', '-'))
+	    .text('Defaulting States')
+	    .attr('id', 'negative')
+	    .attr('class', 'fixed menu-item')
+	    .on('mouseover', mouseover_negative)
+	    .on('mouseout', mouseout_negative);
+	
+	/* Style the vertical heights of the #menu p's dynamically based on the 
+		overall height of the graphic/div, defined above
+	*/
+	menuStates.selectAll('p')
+	    .style({
+		height : menu_p_Height + 'px',
+		'font-size' : menu_p_FontHeight + 'px',
+		'line-height' : menu_p_FontHeight + 'px'
+		})
+
+	/* Mouseover controls everything that needs to happen with respect to 
+		dynamically changing CSS styles when either a line, line label, or a 
+		menu item is moused over
+	*/
+    function mouseover(d) {
+    	/* Determines whether a chosen line slopes positively or negatively */
+    	var y1item = d3
+    		.select('#' + d.BorrowerState.replace(" ", "-") + '.slope-line')
+    			.attr('y1');
+	    var y2item = d3
+	    	.select('#' + d.BorrowerState.replace(" ", "-") + '.slope-line')
+	    		.attr('y2');
+	    var slope = ''
+	    y1item - y2item > 0 ? slope = 'positive' : slope = 'negative';
+	    
+	    var slope_class = 'slope-line-';
+	    var menu_class = 'menu-p-';
+	    var suffix = slope + '--hover';
+	    slope_class = slope_class + suffix;
+	    menu_class = menu_class + suffix;
+	    var avg_label_class = '';
+	    
+	    var state_name = d.BorrowerState
+	    if (state_name == 'National Average') {
+			state_name = 'AVG';
+			slope_class = 'slope-line-neutral--hover';
+			menu_class = 'menu-p-neutral--hover';
+			slope = 'neutral';
+			avg_label_class = 'avg-label';
+	    } else {
+			d3.selectAll('#National-Average')
+				.classed('avg-label', false)
+				.classed('avg-label--other-hover', true);		
+	    };
+	    
+	    d3.selectAll('.slope-label-min-max')
+			.classed('slope-label-min-max', false)
+			.classed('slope-label-min-max--other-hover', true);
+	    d3.select('#' + d.BorrowerState.replace(" ", "-") + '.slope-line')
+			.moveToFront()
+			.classed(slope_class, true);
+    	d3.select('#' + d.BorrowerState.replace(" ", "-") + '.left_labels')
+    		.text(state_name + d3.format(" $,.4r")(d.MeanIncome))
+			.classed("slope-label-min-max", false)
+			.classed('slope-label-min-max--other-hover', false)
+			.classed(avg_label_class, false)
+    		.classed("slope-label--hover", true);
+		d3.select('#' + d.BorrowerState.replace(" ", "-") + '.right_labels')
+    		.text(d3.format(".1%")(+d.PctNonPerf) + ' ' + state_name)
+    		.classed("slope-label-min-max", false)
+			.classed('slope-label-min-max--other-hover', false)
+			.classed(avg_label_class, false)
+    		.classed("slope-label--hover", true);
+	    d3.selectAll('#' + d.BorrowerState.replace(" ", "-") + '.menu-item')
+			.classed(menu_class, true)
+			.classed("menu-p-neutral", false);
+	    d3.select('#' + slope + '.menu-item')
+			.classed(menu_class, true);
+  	} // End Function mouseover
+
+	/* Mouseout controls everything that needs to happen with respect to 
+		dynamically changing CSS styles when either a line, line label, or a 
+		menu item is moused out
+	*/
+  	function mouseout(d) {
+	    var y1item = d3
+	    	.select('#' + d.BorrowerState.replace(" ", "-") + '.slope-line')
+	    		.attr('y1');
+	    var y2item = d3
+	    	.select('#' + d.BorrowerState.replace(" ", "-") + '.slope-line')
+	    		.attr('y2');
+	    var slope = ''
+	    y1item - y2item > 0 ? slope = 'positive' : slope = 'negative';
+	    var slope_class = 'slope-line-';
+	    var menu_class = 'menu-p-';
+	    var suffix = slope + '--hover';
+	    slope_class = slope_class + suffix;
+	    menu_class = menu_class + suffix;
+	    
+	    var static_menu_class = '';
+	    var avg_label_class = ''
+	    var state_name = d.BorrowerState;
+	    if (d.BorrowerState == 'National Average') {
+			static_menu_class = 'menu-p-neutral';
+			avg_label_class = 'avg-label'
+			state_name = 'AVG';
+	    } else {
+			d3.selectAll('#National-Average')
+				.classed('avg-label', true)
+				.classed('avg-label--other-hover', false);		
+	    };
+	    
+	    var minmaxLeftLabelClass = '';
+	    if (minmaxMeanIncome.indexOf(d.MeanIncome) > -1) { 
+	    	minmaxLeftLabelClass = 'slope-label-min-max' 
+	    };
+	    
+	    var minmaxRightLabelClass = '';
+	    if (actualMinMax.indexOf(d.PctNonPerf) > -1) { 
+	    	minmaxRightLabelClass = 'slope-label-min-max'
+	    };
+	    
+	    d3.selectAll('.slope-label-min-max--other-hover')
+			.classed('slope-label-min-max', true)
+			.classed('slope-label-min-max--other-hover', false);	    
+		d3.select('#' + d.BorrowerState.replace(" ", "-") + '.slope-line')
+    		.classed("slope-line-positive--hover", false)
+    		.classed("slope-line-negative--hover", false)
+			.classed("slope-line-neutral--hover", false);
+		d3.select('#' + d.BorrowerState.replace(" ", "-") + '.left_labels')
+			.text(state_name + d3.format(" $,.4r")(d.MeanIncome))
+			.classed(minmaxLeftLabelClass, true)
+			.classed(avg_label_class, true)
+    		.classed("slope-label--hover", false);
+		d3.select('#' + d.BorrowerState.replace(" ", "-") + '.right_labels')
+			.text(d3.format(".1%")(+d.PctNonPerf) + ' ' + state_name)
+			.classed(minmaxRightLabelClass, true)
+			.classed(avg_label_class, true)
+    		.classed("slope-label--hover", false);
+	    d3.selectAll('#' + d.BorrowerState.replace(" ", "-") + '.menu-item')
+			.classed(static_menu_class, true)
+			.classed("menu-p-positive--hover", false)
+			.classed("menu-p-negative--hover", false)
+			.classed("menu-p-neutral--hover", false);
+	    d3.selectAll('line.slope-line-neutral')
+			.moveToFront();
+	    d3.select('#' + slope + '.menu-item')
+			.classed(menu_class, false);
+  	} // End function mouseout
+
+	/* These functions exist because I couldn't figure out how to pass an input
+		parameter to a function from the .on attribute of an svg element
+	*/
+	function mouseover_positive() {
+	    mouseover_fixed('positive');
+	} // End function mouseover_positive
+	
+	function mouseout_positive() {
+	    mouseout_fixed('positive');
+	} // End function mouseout_positive
+	
+	function mouseover_negative() {
+	    mouseover_fixed('negative');
+	} // End function mouseover_negative
+	
+	function mouseout_negative() {
+	    mouseout_fixed('negative');
+	} // End function mouseout_negative
+	
+	/* This function handles mouseover for the Repaying and Defaulting menu 
+		items in the right-hand nav.
+	*/
+	function mouseover_fixed(slope) {
+	    var menu_class = 'menu-p-' + slope + '--hover';
+	    var menu_slope_class = '.menu-item-' + slope;
+	    var line_class = 'slope-line-' + slope;
+	    d3.select('#' + slope)
+			.classed(menu_class, true);
+	    d3.selectAll('line.' + line_class)
+			.classed(line_class + '--hover', true)
+			.moveToFront();
+		d3.selectAll(menu_slope_class)
+			.classed(menu_class, true);
+		d3.selectAll('line.slope-line-neutral')
+			.moveToFront();
+	} // End function mouseover_fixed
+	
+	function mouseout_fixed(slope) {
+	    var menu_class = 'menu-p-' + slope + '--hover';
+	    var menu_slope_class = '.menu-item-' + slope;
+	    var line_class = 'slope-line-' + slope;
+	    d3.select('#' + slope)
+			.classed(menu_class, false);
+	    d3.selectAll('line.' + line_class)
+			.classed(line_class + '--hover', false)
+			.moveToFront();
+		d3.selectAll(menu_slope_class)
+			.classed(menu_class, false);
+		d3.selectAll('line.slope-line-neutral')
+			.moveToFront();
+	} // End function mouseout_fixed
+	
+}; // End function draw
+        
+    </script>
+</head>
+<body>
+    <div id='outer-wrapper'></div>
+	<div id='inner-wrapper'>
+	    <div id='text-region'>
+		<h2>How Well Do Borrowers in Your State Pay Their Debts?</h2>
+		<p>Does a higher income mean a lower rate of loan defaults? 
+		Not necessarily. Explore the menu on the right to see how borrowers in 
+		your state compare with the rest of the country.</p>
+		<p>Upward sloping blue lines indicate that a state's borrowers paid 
+		loans back at a higher percentage than the state's average income would 
+		predict.</p>
+		<p>Downward sloping red lines show states where borrowers defaulted on 
+		their loans at a higher-than-expected rate.</p>
+		<p>A flat line means a state met loan default expectations based on its 
+		income. The steeper the slope of a line, the more a state outperformed 
+		or underperformed expectations.</p>
+		<p>Source data: Prosper.com 2005-2014. The loan default rate is the 
+		percentage of the total loan count that Prosper considered "Charged Off"
+		or "Defaulted." The expected loan default rate comes from a linear 
+		regression using only those loans for which an entire vintage had fully
+		matured as of mid-2014.</p>
+	    </div> 
+	    <div id='svg-holder'>
+		<script type="text/javascript">
+		    d3.csv("weighted_state_performance.csv", draw);
+		</script>
+	    </div> <!-- close svg-holder -->
+	    <div id='menu'>
+	    </div> <!-- close menu -->
+	    <div style="clear: both;"></div>
+	</div> <!-- close inner-wrapper -->
+    </div> <!-- close outer-wrapper -->
+</body>
+</html>
