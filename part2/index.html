@@ -20,7 +20,7 @@
 
       #container {
         width: 800px;
-        margin: 20px auto;
+        margin: 0 auto;
       }
 
       h1 {
@@ -46,10 +46,16 @@
       }
 
       #map-container {
-        height: 500px;
+        height: 460px;
         text-align: center;
         position: relative;
-        margin: 20px 0;
+        margin: 0;
+      }
+      #formdiv {
+      	height: 40px;
+      	text-align: center;
+		vertical-align: middle;
+		line-height: 40px;
       }
 
       #map {
@@ -69,11 +75,11 @@
       path.state:hover {
         stroke: #000;
       }
-
+/*
       form {
         font-size: 120%;
       }
-
+*/
       select {
         font-size: inherit;
       }
@@ -90,7 +96,7 @@
   </head>
   <body>
     <div id="container">
-      <h1>The United States of Delinquency Part 2: Cartograms</h1>
+      <div id="formdiv">
       <form>
         <p>
           <label>Scale state sizes by <select id="field"></select></label>
@@ -99,32 +105,11 @@
           <span id="status"></span>
         </p>
       </form>
+      </div>
       <div id="map-container">
         <img id="placeholder" alt="placeholder image for old browsers" src="placeholder.png">
         <svg id="map"></svg>
       </div>
-      <div id="about">
-        <h2>About</h2>
-        <p><a href="cartogram.js">cartogram.js</a> is a JavaScript implementation of
-        <a href="http://lambert.nico.free.fr/tp/biblio/Dougeniketal1985.pdf">an algoritm to construct continuous area cartograms</a>,
-        by James A. Dougenik, Nicholas R. Chrisman and Duane R. Niemeyer,
-        &copy;1985 by the Association of American Geographers. This example combines
-        <a href="http://github.com/mbostock/topojson">TopoJSON</a>-encoded 
-        boundaries of the United States from
-        <a href="http://www.naturalearthdata.com/downloads/110m-cultural-vectors/">Natural Earth</a>
-        with
-        <a href="http://www.census.gov/popest/data/state/totals/2011/">2011 US Census population estimates</a>
-        to size each state proportionally.</p>
-        
-        <p>This uses segmented topology, which distorts the shapes more fluidly 
-        than the original.</p>
-
-        <p>Designed and built by <a href="http://stamen.com/studio/shawn">Shawn Allen</a> at
-        <a href="http://stamen.com">Stamen</a>. But
-        <a href="http://d3js.org">d3.js</a> does most of the heavy lifting;
-        colors by <a href="http://colorbrewer2.org">colorbrewer</a>.</p>
-      </div>
-
     </div>
     <script>
 
@@ -236,8 +221,9 @@
 
       var map = d3.select("#map"),
           zoom = d3.behavior.zoom()
-            .translate([-38, 32])
-            .scale(.94)
+            //.translate([-38, 32])
+            .translate([-38, 0])
+            .scale(.93)
             .scaleExtent([0.5, 10.0])
             .on("zoom", updateZoom),
           layer = map.append("g")
@@ -276,7 +262,7 @@
         
       };
 
-   	var url = "/us-states-segmentized.json"
+   	var url = "./us-states-segmentized.json"
     	
    // debugger;
       d3.json(url, function(topo) {
